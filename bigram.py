@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-import urllib.request
 
 batch_size = 32
 block_size = 8
@@ -10,13 +9,11 @@ eval_interval = 300
 learning_rate = 1e-2
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 eval_iters = 200
-
+n_embd = 32
 torch.manual_seed(42)
 
 
-url = 'https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt'
-urllib.request.urlretrieve(url, 'input.txt')
-with open('input.txt', 'r') as f:
+with open("az_data.txt", "r", encoding="utf-8") as f:
     text = f.read()
 
 chars = sorted(list(set(text)))
@@ -54,13 +51,19 @@ def estimate_loss():
     return out
 class BigramLanguageModel(nn.Module):
     
-    def __init__(self, vocab_size):
+    def __init__(self, vocab_size, n_embd):
         super().__init__()
-        self.token_embedding_table = nn.Embedding(vocab_size, vocab_size)
+        self.token_embedding_table = nn.Embedding(vocab_size, n_embd)
+        self.position_emdedding_table = nn.Embedding(block_size, n_embd)
+        self.lm_head = nn.Linear(n_embd, vocab_size)
 
     def forward(self, idx, targets = None):
+        B, T = idx.shape
 
-        logits = self.token_embedding_table(idx) #(B, T, C)
+        tok_emb = self.token_embedding_table(idx) #(B, T, n_embd)
+        pos_emb = self.position_emdedding_table(torch.arange(T, device = device)) #(T, C)
+        x = tok_emb + pos_emb #(B, T, C)
+        logits = self.lm_head(tok_emb) #(B, T, vocab_size)
 
         if targets is None:
             loss = None
@@ -74,7 +77,8 @@ class BigramLanguageModel(nn.Module):
 
     def generate(self, idx, max_new_tokens):
         for _ in range(max_new_tokens):
-            logits, loss = self(idx)
+            idx_cond = idx[:, -block_size:]
+            logits, loss = self(idx_cond)
             logits = logits[:, -1, :]
 
             probs = F.softmax(logits, dim = -1)
@@ -84,7 +88,7 @@ class BigramLanguageModel(nn.Module):
 
         return idx
 
-model = BigramLanguageModel(vocab_size)
+model = BigramLanguageModel(vocab_size, n_embd)
 m = model.to(device)
 optimizer = torch.optim.AdamW(m.parameters(), lr = learning_rate)
 
@@ -102,4 +106,4 @@ for iter in range(max_iters):
 
 
 context = torch.zeros((1, 1), dtype = torch.long, device = device)
-print(decode(m.generate(context, max_new_tokens = 100)[0].tolist()))
+print(decode(m.generate(context, max_new_tokens = 300)[0].tolist()))
