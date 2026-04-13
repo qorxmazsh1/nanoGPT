@@ -65,7 +65,7 @@ async def load_model():
     )
     model.load_state_dict(ckpt['model'])
     model.eval().to(device)
-    print("Model uğurla yükləndi!")
+    print("Model loaded successfully!")
 
 class GenerateRequest(BaseModel):
     prompt: str = ""
