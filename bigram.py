@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+import os
 
 batch_size = 32
 block_size = 8
@@ -106,4 +107,16 @@ for iter in range(max_iters):
 
 
 context = torch.zeros((1, 1), dtype = torch.long, device = device)
-print(decode(m.generate(context, max_new_tokens = 300)[0].tolist()))
+print(decode(m.generate(context, max_new_tokens = 500)[0].tolist()))
+
+os.makedirs('out', exist_ok=True)
+checkpoint = {
+    'model': m.state_dict(),
+    'vocab_size': vocab_size,
+    'block_size': block_size,
+    'n_embd': n_embd,
+    'stoi': stoi,
+    'itos': itos,
+}
+torch.save(checkpoint, 'out/ckpt.pt')
+print("Checkpoint saved: out/ckpt.pt")

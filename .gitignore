@@ -1,0 +1,5 @@
+az_data.txt
+out/
+__pycache__/
+*.pyc
+.env
