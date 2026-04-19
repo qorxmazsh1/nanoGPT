@@ -2,17 +2,47 @@ import requests
 from bs4 import BeautifulSoup
 import time
 import re
+import os
 
+# Request headers to mimic a real browser
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 }
+
+def is_azerbaijani(text, threshold=0.85):
+
+    letters = [c for c in text if c.isalpha()]
+    if not letters:
+        return False
+    latin = [c for c in letters if ord(c) < 600]  
+    return len(latin) / len(letters) >= threshold
 
 def clean_text(text):
     text = re.sub(r'\s+', ' ', text)
     text = text.strip()
     return text
 
+
+def load_local_txt(file_paths):
+    texts = []
+    for path in file_paths:
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            paragraphs = content.split('\n')
+            clean = [p for p in paragraphs if is_azerbaijani(p) and len(p) > 50]
+            text = '\n'.join(clean)
+            text = clean_text(text)
+            if len(text) > 100:
+                texts.append(text)
+                print(f"  ok: {path} ({len(text):,} chars)")
+        except Exception as e:
+            print(f"  error reading {path}: {e}")
+    return texts
+
+
 def wikipedia_article(title):
+    """Fetch a single Azerbaijani Wikipedia article by title"""
     url = f"https://az.wikipedia.org/wiki/{title.replace(' ', '_')}"
     try:
         r = requests.get(url, headers=HEADERS, timeout=10)
@@ -20,6 +50,7 @@ def wikipedia_article(title):
         content = soup.find('div', {'id': 'mw-content-text'})
         if not content:
             return ""
+        # Remove noisy HTML elements
         for tag in content.find_all(['table', 'sup', 'style', 'script']):
             tag.decompose()
         paragraphs = content.find_all('p')
@@ -29,9 +60,11 @@ def wikipedia_article(title):
         print(f"wikipedia error {title}: {e}")
         return ""
 
+
 def wikipedia_random(count=100):
+    """Fetch random Azerbaijani Wikipedia articles"""
     texts = []
-    print(f"fetching {count} articles from wikipedia")
+    print(f"fetching {count} random articles from az.wikipedia.org")
     for i in range(count):
         try:
             r = requests.get(
@@ -56,7 +89,9 @@ def wikipedia_random(count=100):
             print(f"  [{i+1}] error: {e}")
     return texts
 
+
 def azertag_news(page_count=5):
+    """Scrape news articles from azertag.az"""
     texts = []
     print(f"fetching {page_count} pages from azertag.az")
     for page in range(1, page_count + 1):
@@ -89,6 +124,7 @@ def azertag_news(page_count=5):
         time.sleep(1)
     return texts
 
+
 def reportaz_news(page_count=5):
     texts = []
     print(f"fetching {page_count} pages from report.az")
@@ -100,6 +136,7 @@ def reportaz_news(page_count=5):
             )
             soup = BeautifulSoup(r.text, 'html.parser')
             links = soup.select('a[href]')
+            # Filter for valid report.az article links
             news_links = list(set([
                 l.get('href') for l in links
                 if 'report.az/az/' in str(l.get('href', ''))
@@ -123,7 +160,9 @@ def reportaz_news(page_count=5):
         time.sleep(1)
     return texts
 
+
 def oxuaz_news(page_count=5):
+    """Scrape news articles from oxu.az"""
     texts = []
     print(f"fetching {page_count} pages from oxu.az")
     for page in range(1, page_count + 1):
@@ -134,6 +173,7 @@ def oxuaz_news(page_count=5):
             )
             soup = BeautifulSoup(r.text, 'html.parser')
             links = soup.select('a[href*="/"]')
+            # Filter for Azerbaijani content links
             news_links = list(set([
                 l.get('href') for l in links
                 if l.get('href') and 'oxu.az' in str(l.get('href'))
@@ -143,6 +183,7 @@ def oxuaz_news(page_count=5):
                 try:
                     r2 = requests.get(link, headers=HEADERS, timeout=10)
                     soup2 = BeautifulSoup(r2.text, 'html.parser')
+                    # Look for main article content div
                     article = soup2.find('div', class_=re.compile(r'article|content|news|text', re.I))
                     if article:
                         text = clean_text(article.get_text())
@@ -157,8 +198,18 @@ def oxuaz_news(page_count=5):
         time.sleep(1)
     return texts
 
+
 def main():
     all_texts = []
+
+
+    local_files = [
+      "article1.txt",
+      "merged_part_3.txt"
+    ]
+    if local_files:
+        print("loading local txt files...")
+        all_texts.extend(load_local_txt(local_files))
 
     titles = [
         "Azərbaycan", "Bakı", "Azərbaycan_dili", "Azərbaycan_tarixi",
@@ -166,8 +217,7 @@ def main():
         "Azərbaycan_iqtisadiyyatı", "Xəzər_dənizi", "Qarabağ",
         "Azərbaycan_əlifbası", "Azərbaycan_ədəbiyyatı", "Nizami_Gəncəvi",
     ]
-
-    print("fetching articles...")
+    print("fetching specific wikipedia articles...")
     for title in titles:
         text = wikipedia_article(title)
         if text:
@@ -176,18 +226,22 @@ def main():
         time.sleep(0.5)
 
     all_texts.extend(wikipedia_random(count=100))
+
     all_texts.extend(azertag_news(page_count=10))
     all_texts.extend(reportaz_news(page_count=10))
     all_texts.extend(oxuaz_news(page_count=10))
+
 
     final_text = '\n\n'.join(all_texts)
 
     with open('az_data.txt', 'w', encoding='utf-8') as f:
         f.write(final_text)
 
-    print(f"article count: {len(all_texts)}")
-    print(f"character count: {len(final_text):,}")
-    print(f"word count: {len(final_text.split()):,}")
+    print(f"\narticle count:    {len(all_texts)}")
+    print(f"character count:  {len(final_text):,}")
+    print(f"word count:       {len(final_text.split()):,}")
+    print(f"file size:        {os.path.getsize('az_data.txt') / 1_000_000:.2f} MB")
+
 
 if __name__ == "__main__":
     main()

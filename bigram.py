@@ -1,14 +1,15 @@
 import torch
 import os
-from model import BigramLanguageModel, block_size, n_embd
+from model import BigramLanguageModel, block_size, n_embd, n_heads, n_layers
 
-batch_size = 32
-max_iters = 3000
-eval_interval = 300
-learning_rate = 1e-3
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-eval_iters = 200
-torch.manual_seed(42)
+batch_size    = 64
+max_iters     = 5000
+eval_interval = 500
+learning_rate = 3e-4
+device        = 'cuda' if torch.cuda.is_available() else 'cpu'
+eval_iters    = 200
+torch.manual_seed(1337)
+
 
 with open("az_data.txt", "r", encoding="utf-8") as f:
     text = f.read()
@@ -23,15 +24,14 @@ decode = lambda l: ''.join([itos[i] for i in l])
 data = torch.tensor(encode(text), dtype=torch.long)
 n = int(0.9 * len(data))
 train_data = data[:n]
-val_data = data[n:]
+val_data   = data[n:]
 
 def get_batch(split):
     data = train_data if split == 'train' else val_data
     ix = torch.randint(len(data) - block_size, (batch_size,))
-    x = torch.stack([data[i:i+block_size] for i in ix])
-    y = torch.stack([data[i+1:i+block_size+1] for i in ix])
-    x, y = x.to(device), y.to(device)
-    return x, y
+    x = torch.stack([data[i:i + block_size] for i in ix])
+    y = torch.stack([data[i + 1:i + block_size + 1] for i in ix])
+    return x.to(device), y.to(device)
 
 @torch.no_grad()
 def estimate_loss():
@@ -41,20 +41,31 @@ def estimate_loss():
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
             X, Y = get_batch(split)
-            logits, loss = model(X, Y)
+            _, loss = model(X, Y)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
     return out
 
-model = BigramLanguageModel(vocab_size, n_embd, block_size)
+model = BigramLanguageModel(
+    vocab_size=vocab_size,
+    n_embd=n_embd,
+    block_size=block_size,
+    n_heads=n_heads,
+    n_layers=n_layers,
+)
 m = model.to(device)
+
+total_params = sum(p.numel() for p in m.parameters())
+print(f"Model params: {total_params / 1e6:.2f}M")
+
 optimizer = torch.optim.AdamW(m.parameters(), lr=learning_rate)
 
 for iter in range(max_iters):
-    if iter % eval_interval == 0:
+    if iter % eval_interval == 0 or iter == max_iters - 1:
         losses = estimate_loss()
-        print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        print(f"step {iter:4d}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+
     xb, yb = get_batch('train')
     logits, loss = m(xb, yb)
     optimizer.zero_grad(set_to_none=True)
@@ -66,12 +77,14 @@ print(decode(m.generate(context, max_new_tokens=500)[0].tolist()))
 
 os.makedirs('out', exist_ok=True)
 checkpoint = {
-    'model': m.state_dict(),
+    'model':      m.state_dict(),
     'vocab_size': vocab_size,
     'block_size': block_size,
-    'n_embd': n_embd,
-    'stoi': stoi,
-    'itos': itos,
+    'n_embd':     n_embd,
+    'n_heads':    n_heads,
+    'n_layers':   n_layers,
+    'stoi':       stoi,
+    'itos':       itos,
 }
 torch.save(checkpoint, 'out/ckpt.pt')
 print("Checkpoint saved: out/ckpt.pt")
