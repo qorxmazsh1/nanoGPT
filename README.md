@@ -98,7 +98,10 @@ docker run -p 8000:8000 -v $(pwd)/out:/app/out nanogpt-az
 
 The API is deployed via Railway with GitHub Actions CI/CD. Every push to `main` triggers an automatic redeploy.
 
-## References
 
-- [Andrej Karpathy's nanoGPT](https://github.com/karpathy/nanoGPT)
-- [Let's build GPT — YouTube](https://www.youtube.com/watch?v=kCc8FmEb1nY)
+## Sample Output
+
+Generated 500 tokens with prompt: 
+'''
+ Siyadov və Sar Eyni oğlu, Ədalət-qızı,Qərbi Qəbələrimlə xanət zəifləməyəcək. Yox ust edərək, Şəhər xəstənin 202-ci ilin ötən nəqli şəxsi təcrübə olanlar sözləri onları arasında - bu qeyri-ədədinlik Mərkəz bacarıqlı olacaqları adlanan imzalarıq, demək olar ki, Türklenski texnologiyan təbiətçilərimizlə və onların yeganə hesabıdır.
+'''
